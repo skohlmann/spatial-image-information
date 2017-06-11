@@ -2,6 +2,10 @@
 
 A simple command line tool for calculating spatial information for images based on Soble operator.
 
+## Status
+
+Warning: this tool is very alpha.
+
 # Introduction
 
 The command line tool calculates spatial information based on the Sobel operator. The
