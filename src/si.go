@@ -1,9 +1,8 @@
 package main
 
-
 import (
     "flag"
-	"fmt"
+    "fmt"
     "image"
     "image/color"
     "image/png" // register the PNG format with the image package
@@ -23,19 +22,42 @@ type Kernel struct {
     Y [][]int
 }
 
+func header() {
+    fmt.Fprintf(os.Stderr, "Spartial information of images.\n")
+    fmt.Fprintf(os.Stderr, "Copyright 2017 Sascha Kohlmann.\n")
+}
 
+func usage() {
+    fmt.Fprintf(os.Stderr, "usage: si [options] image\n\n")
+    header()
+    fmt.Fprintf(os.Stderr, "\nOptions:\n")
+    fmt.Fprintf(os.Stderr, "  -h       : prints this help\n")
+    fmt.Fprintf(os.Stderr, "  -k name  : name of the kernel to use. Default: sobel\n")
+    fmt.Fprintf(os.Stderr, "  -o name  : stores a control image with <name>\n")
+    fmt.Fprintf(os.Stderr, "  -v       : prints additional information on stderr\n")
+}
 
 
 func main() {
     
-    si_img_name := flag.String("o", "", "Name of the SI image - optional")
+    if len(os.Args) == 1 {
+        usage()
+        return
+    }
+
+    siImgName := flag.String("o", "", "Name of the SI image - optional")
     verbose := flag.Bool("v", false, "Prints additional information to stderr")
-    // kernel_name := flag.String("k", "sobel", "Name of the SI kernel - optional")
+    help := flag.Bool("h", false, "Prints this help")
+    // kernelName := flag.String("k", "sobel", "Name of the SI kernel - optional")
     flag.Parse()
-    in_name := os.Args[len(os.Args) - 1]
+    srcImgName := os.Args[len(os.Args) - 1]
     
+    if *help {
+        usage()
+        return
+    }
     
-    infile, err := os.Open(in_name)
+    infile, err := os.Open(srcImgName)
     check(err)
     
     defer infile.Close()
@@ -47,7 +69,7 @@ func main() {
         {-1, 0, 1},
         {-2, 0, 2},
         {-1, 0, 1},
-    }	
+    }
 
     sobelY_kernel3x3 := [3][3]int{
         { 1,  2,  1},
@@ -102,9 +124,9 @@ func main() {
                 for b := 0; b < kernel_size; b++ {
                     xn := x + a - half_kernel_size
                     yn := y + b - half_kernel_size
- 					
+
                     idx := xn + yn * width
- 					
+
                     magX += float64(grayImage.Pix[idx]) * float64(kernelX[a][b])
                     magY += float64(grayImage.Pix[idx]) * float64(kernelY[a][b])
                 }
@@ -117,13 +139,12 @@ func main() {
             newImage.SetGray(x, y, color.Gray{uint8(SIr)})
         }
     }
- 	
 
     pixel := width * height
     SImean := (1.0 / float64(pixel)) * float64(SIsum)
-    SIrms := math.Sqrt((1.0 / float64(pixel)) * float64(SIrm))
 
     if *verbose {
+        SIrms := math.Sqrt((1.0 / float64(pixel)) * float64(SIrm))
         fmt.Fprintf(os.Stderr, "width=%d\n", width)
         fmt.Fprintf(os.Stderr, "height=%d\n", height)
         fmt.Fprintf(os.Stderr, "pixel=%d\n", pixel)
@@ -131,12 +152,11 @@ func main() {
         fmt.Fprintf(os.Stderr, "SIrm=%dd\n", SIrm)
         fmt.Fprintf(os.Stderr, "SIrms=%f\n", SIrms)
     }
- 	
- 	
+
     fmt.Printf("%f", SImean)
- 	
-    if strings.Compare(*si_img_name, "") != 0 {
-        saveFile, err := os.Create(*si_img_name)
+
+    if strings.Compare(*siImgName, "") != 0 {
+        saveFile, err := os.Create(*siImgName)
         check(err)
         defer saveFile.Close()
         err = png.Encode(saveFile, newImage)
