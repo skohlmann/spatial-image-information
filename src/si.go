@@ -5,6 +5,7 @@ import (
     "fmt"
     "image"
     "image/color"
+    "image/jpeg" // register the PNG format with the image package
     "image/png" // register the PNG format with the image package
     "os"
     "strings"
@@ -37,6 +38,32 @@ func usage() {
     fmt.Fprintf(os.Stderr, "  -v       : prints additional information on stderr\n")
 }
 
+func postfix(name string) string {
+    parts := strings.Split(name, ".")
+    if len(parts) != 0 {
+        return parts[len(parts) - 1]
+    }
+    return ""
+}
+
+func loadImage(name string) image.Image {
+    infile, err := os.Open(name)
+    check(err)
+    defer infile.Close()
+    postfix := strings.ToLower(postfix(name))
+
+    if strings.Compare(postfix, "png") == 0 {
+        src, err := png.Decode(infile)
+        check(err)
+        return src
+    } else if strings.Compare(postfix, "jpg") == 0 {
+        src, err := jpeg.Decode(infile)
+        check(err)
+        return src
+    }
+    panic("Unsupported image type. Must be PNG or JPEG")
+}
+
 
 func main() {
     
@@ -57,13 +84,8 @@ func main() {
         return
     }
     
-    infile, err := os.Open(srcImgName)
-    check(err)
     
-    defer infile.Close()
-    
-    src, err := png.Decode(infile)
-    check(err)
+    src := loadImage(srcImgName)
 
     sobelX_kernel3x3 := [3][3]int{
         {-1, 0, 1},

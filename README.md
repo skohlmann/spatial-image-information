@@ -35,7 +35,7 @@ Use
    si &lt;image>
 </pre>
 
-from command line where `&lt;image>` is the filename of the PNG image to get `SImean` for.
+from command line where `&lt;image>` is the filename of the PNG or JPEG image to get `SImean` for.
 
 # Build
 
