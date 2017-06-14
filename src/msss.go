@@ -75,12 +75,12 @@ func imageToLab(src image.Image) *LAB {
             //------------------------
             // XYZ to LAB conversion
             //------------------------
-            const epsilon := 0.008856 //actual CIE standard
-            const kappa := 903.3      //actual CIE standard
+            const epsilon float64 = 0.008856 //actual CIE standard
+            const kappa float64 = 903.3      //actual CIE standard
 
-            Xr := 0.950456 //reference white
-            Yr := 1.0      //reference white
-            Zr := 1.088754 //reference white
+            const Xr float64 = 0.950456 //reference white
+            const Yr float64 = 1.0      //reference white
+            const Zr float64 = 1.088754 //reference white
 
             xr := X / Xr
             yr := Y / Yr
@@ -111,6 +111,173 @@ func imageToLab(src image.Image) *LAB {
     }    
     return lab
 }
+
+func gaussianSmooth(srcImg []float64, width int, height int, kernel []float64) []float64 {
+    smoothImg := make([]float64, len(srcImg))
+    tmpImg := make([]float64, len(srcImg))
+    center := len(kernel) / 2
+    
+    rows := height
+    cols := width
+
+    // Blur in the x direction.    
+    idx := 0
+    for r := 0; r < rows; r++ {
+        for c := 0; c < cols; c++ {
+            var kernelsum float64
+            var sum float64
+            for cc := 	(-center); cc <= center; cc++ {
+                if ((c + cc) >= 0) && ((c + cc) < cols) {
+                    sum += srcImg[r * cols + (c + cc)] * kernel[center + cc]
+                    kernelsum += kernel[center + cc]
+                }
+            }
+            tmpImg[idx] = sum / kernelsum
+            idx++
+        } 
+    }
+
+    // Blur in the y direction.
+    idx = 0
+    for r := 0; r < rows; r++ {
+        for c := 0; c < cols; c++ {
+            var kernelsum float64
+            var sum float64
+            
+            for rr := (-center); rr <= center; rr++ {
+                if ((r + rr) >= 0) && ((r + rr) < rows) {
+                    sum += tmpImg[(r + rr) * cols + c] * kernel[center + rr]
+                    kernelsum += kernel[center + rr]
+                }   
+            }            
+            
+            smoothImg[idx] = sum / kernelsum;
+            idx++;
+        } 
+    }
+
+    return smoothImg 
+}
+
+func createIntegralImage(srcImg []float64, width int, height int) [][]float64 {
+    intImg := make([][]float64, height)
+    for i := range intImg {
+        intImg[i] = make([]float64, width)
+    }
+    idx := 0
+    
+    for j := 0; j < height; j++ {
+        var sumRow float64
+        for k := 0; k < width; k++ {
+            sumRow += srcImg[idx]
+            idx++
+            if 0 == j {
+                intImg[j][k] = sumRow
+            } else {
+                intImg[j][k] = intImg[j - 1][k] + sumRow
+            }
+        }
+    }
+    
+    return intImg
+}
+
+func getIntegralSum(intImg [][]float64, x1, y1, x2, y2 int) float64 {
+    var sum float64
+    
+    if x1 - 1 < 0 && y1 - 1 < 0 {
+        sum = intImg[y2][x2]
+    } else if x1 - 1 < 0 {
+        sum = intImg[y2][x2] - intImg[y1 - 1][x2]
+    } else if y1 - 1 < 0 {
+        sum = intImg[y2][x2] - intImg[y2][x1 - 1]
+    } else {
+        sum = intImg[y2][x2] + intImg[y1 - 1][x1 - 1] - intImg[y1 - 1][x2] - intImg[y2][x1 - 1]
+    }
+    
+    return sum
+}
+
+func doNormalize(salMap []float64, width, height int) {
+    maxValue := 0.0
+    minValue := float64(1 << 30)
+    
+    size := width * height
+    for i := 0; i < size; i++ {
+        if maxValue < salMap[i] {
+            maxValue = salMap[i]
+        }
+        if minValue > salMap[i] {
+            minValue = salMap[i]
+        }
+    }
+    
+    _range := maxValue - minValue
+    if _range <= 0 {panic("Range lower 0")}
+    
+    for i := 0; i < size; i++ {
+        salMap[i] = ((255.0 * (salMap[i] - minValue)) / _range)
+    }
+    
+}
+
+func max(a, b int) int {
+    if a <= b {
+        return b
+    }
+    return a
+}
+
+func min(a, b int) int {
+    if a <= b {
+        return a
+    }
+    return b
+}
+
+func computeMaximumSymmetricSurroundSaliency(source LAB, width, height int, normalize bool) []float64 {
+    size := width * height
+    saliencyMap := make([]float64, size)
+    
+    kernel := []float64{1.0, 2.0, 1.0}
+    
+    ls := gaussianSmooth(source.L, width, height, kernel)
+    as := gaussianSmooth(source.A, width, height, kernel)
+    bs := gaussianSmooth(source.B, width, height, kernel)
+
+    lint := createIntegralImage(source.L, width, height)
+    aint := createIntegralImage(source.A, width, height)
+    bint := createIntegralImage(source.B, width, height)
+
+    index := 0
+    for j := 0; j < height; j++ {
+        yoff := min(j, height - j)
+        y1 := max(j - yoff, 0)
+        y2 := min(j + yoff, height - 1)
+
+        for k := 0; k < width; k++ {
+            xoff := min(k, width - k)
+            x1 := max(k - xoff, 0)
+            x2 := min(k + xoff, width - 1)
+
+            area := (x2 - x1 + 1) * (y2 - y1 + 1);
+            
+            lval := getIntegralSum(lint, x1, y1, x2, y2) / float64(area)
+            aval := getIntegralSum(aint, x1, y1, x2, y2) / float64(area)
+            bval := getIntegralSum(bint, x1, y1, x2, y2) / float64(area)
+            
+            saliencyMap[index] = (lval - ls[index]) * (lval - ls[index]) + (aval - as[index]) * (aval - as[index]) + (bval - bs[index]) * (bval - bs[index]); //square of the euclidean distance
+            index++
+        }
+    }
+    
+    if normalize == true {
+        doNormalize(saliencyMap, width, height)
+    }
+    
+    return saliencyMap
+}
+
 
 func loadImage(name string) image.Image {
     infile, err := os.Open(name)
