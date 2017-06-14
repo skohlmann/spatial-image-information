@@ -75,8 +75,8 @@ func imageToLab(src image.Image) *LAB {
             //------------------------
             // XYZ to LAB conversion
             //------------------------
-            epsilon := 0.008856 //actual CIE standard
-            kappa := 903.3      //actual CIE standard
+            const epsilon := 0.008856 //actual CIE standard
+            const kappa := 903.3      //actual CIE standard
 
             Xr := 0.950456 //reference white
             Yr := 1.0      //reference white
