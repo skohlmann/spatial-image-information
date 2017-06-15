@@ -29,7 +29,7 @@ func header() {
 }
 
 func usage(prgName string) {
-    fmt.Fprintf(os.Stderr, "usage: %s [options] image\n\n", prgName)
+    fmt.Fprintf(os.Stderr, "usage: %s [options] image\n\n", prgName	)
     header()
     fmt.Fprintf(os.Stderr, "\nOptions:\n")
     fmt.Fprintf(os.Stderr, "  -h       : prints this help\n")

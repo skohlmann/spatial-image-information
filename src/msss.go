@@ -210,7 +210,6 @@ func doNormalize(salMap []float64, width, height int) {
     
     size := width * height
     for i := 0; i < size; i++ {
-//        fmt.Printf("salMap %v\n", salMap[i])
         if maxValue < salMap[i] {
             maxValue = salMap[i]
         }
@@ -219,14 +218,12 @@ func doNormalize(salMap []float64, width, height int) {
         }
     }
     
-//    fmt.Printf("max: %f - min: %f\n", maxValue, minValue)
     
     _range := maxValue - minValue
     if _range <= 0 {panic("Range lower 0")}
     
     for i := 0; i < size; i++ {
         salMap[i] = ((255.0 * (salMap[i] - minValue)) / _range)
-//        fmt.Printf("Normalized: %v\n", salMap[i])
     }
     
 }
@@ -327,21 +324,20 @@ func main() {
         return
     }
 
-    srcImgName := flag.String("i", "", "Name of the input image")
     saliencyImgName := flag.String("o", "", "Name of the saliency image")
     help := flag.Bool("h", false, "Prints this help")
     flag.Parse()
+    srcImgName := os.Args[len(os.Args) - 1]
 
     if *help {
         usage(os.Args[0])
         return
     }
 
-    src := loadImage(*srcImgName)
+    src := loadImage(srcImgName)
     lab := imageToLab(src)
     bounds := src.Bounds()
     salMap := computeMaximumSymmetricSurroundSaliency(*lab, bounds.Max.X, bounds.Max.Y, true)
-//    fmt.Printf("SalMap: %d - name: %v\n", len(salMap), targetImgName)
     
     gray := image.NewGray(bounds)
     size := len(salMap)
@@ -369,11 +365,10 @@ func header() {
 }
 
 func usage(prgName string) {
-    fmt.Fprintf(os.Stderr, "usage: %s [options]\n\n", prgName)
+    fmt.Fprintf(os.Stderr, "usage: %s [options] <image>\n\n", prgName)
     header()
     fmt.Fprintf(os.Stderr, "\nOptions:\n")
     fmt.Fprintf(os.Stderr, "  -h       : prints this help\n")
-    fmt.Fprintf(os.Stderr, "  -i name  : name of the input image\n")
     fmt.Fprintf(os.Stderr, "  -o name  : stores a saliency control image with <name> - optional\n")
 }
 
