@@ -1,20 +1,27 @@
 package main
 
+/*
+ * Computes the saliency mean factor based on Radhakrishna Achanta and and S. Suesstrunk
+ * salient detection algorithm published in "Saliency Detection using Maximum Symmetric Surround",
+ * Proceedings of IEEE International Conference on Image Processing (ICIP), 2010.
+ *
+ * This code is a simple scripted go implementation of the C++ code, published at
+ * http://ivrl.epfl.ch/page-75168-en.html
+ *
+ * Original code (c) 2010 Radhakrishna Achanta [EPFL]. All rights reserved.
+ * Go code (c) 2017 Sascha Kohlmann
+ */
+
 import (
-//    "flag"
+    "flag"
     "fmt"
     "image"
-//    "image/color"
     "image/jpeg" // register the PNG format with the image package
     "image/png" // register the PNG format with the image package
     "os"
     "strings"
     "math"
 )
-
-func main() {
-    imageToLab(nil)
-}
 
 
 type LAB struct {
@@ -35,7 +42,6 @@ func (l *LAB) InitLabSize(size int) {
 func imageToLab(src image.Image) *LAB {
     lab := new(LAB)
     
-    fmt.Printf("lab: %v", lab)
     bounds := src.Bounds()
     pixel := bounds.Max.X * bounds.Max.Y
     lab.InitLabSize(pixel)
@@ -204,6 +210,7 @@ func doNormalize(salMap []float64, width, height int) {
     
     size := width * height
     for i := 0; i < size; i++ {
+//        fmt.Printf("salMap %v\n", salMap[i])
         if maxValue < salMap[i] {
             maxValue = salMap[i]
         }
@@ -212,11 +219,14 @@ func doNormalize(salMap []float64, width, height int) {
         }
     }
     
+//    fmt.Printf("max: %f - min: %f\n", maxValue, minValue)
+    
     _range := maxValue - minValue
     if _range <= 0 {panic("Range lower 0")}
     
     for i := 0; i < size; i++ {
         salMap[i] = ((255.0 * (salMap[i] - minValue)) / _range)
+//        fmt.Printf("Normalized: %v\n", salMap[i])
     }
     
 }
@@ -310,3 +320,60 @@ func check(e error) {
         panic(e)
     }
 }
+
+func main() {
+    if len(os.Args) == 1 {
+        usage()
+        return
+    }
+
+    srcImgName := flag.String("i", "", "Name of the input image")
+    saliencyImgName := flag.String("o", "", "Name of the saliency image")
+    help := flag.Bool("h", false, "Prints this help")
+    flag.Parse()
+
+    if *help {
+        usage()
+        return
+    }
+
+    src := loadImage(*srcImgName)
+    lab := imageToLab(src)
+    bounds := src.Bounds()
+    salMap := computeMaximumSymmetricSurroundSaliency(*lab, bounds.Max.X, bounds.Max.Y, true)
+//    fmt.Printf("SalMap: %d - name: %v\n", len(salMap), targetImgName)
+    
+    gray := image.NewGray(bounds)
+    size := len(salMap)
+    var Ssum float64
+    for i := 0; i < size; i++ {
+        Ssum += salMap[i]
+        gray.Pix[i] = uint8(salMap[i] * 1.1)
+    }
+    
+    Smean := (1.0 / float64((float64(bounds.Max.X * bounds.Max.Y))) * Ssum)
+    fmt.Printf("%f", Smean)
+    
+    if strings.Compare(*saliencyImgName, "") != 0 {
+        saveFile, err := os.Create(*saliencyImgName)
+        check(err)
+        defer saveFile.Close()
+        err = png.Encode(saveFile, gray)
+        check(err)
+    }
+}
+
+func header() {
+    fmt.Fprintf(os.Stderr, "Saliency Detection using Maximum Symmetric Surround of images.\n")
+    fmt.Fprintf(os.Stderr, "Copyright (c) 2017 Sascha Kohlmann.\n")
+}
+
+func usage() {
+    fmt.Fprintf(os.Stderr, "usage: si [options] image\n\n")
+    header()
+    fmt.Fprintf(os.Stderr, "\nOptions:\n")
+    fmt.Fprintf(os.Stderr, "  -h       : prints this help\n")
+    fmt.Fprintf(os.Stderr, "  -i name  : name of the input image\n")
+    fmt.Fprintf(os.Stderr, "  -o name  : stores a saliency control image with <name> - optional\n")
+}
+
