@@ -323,7 +323,7 @@ func check(e error) {
 
 func main() {
     if len(os.Args) == 1 {
-        usage()
+        usage(os.Args[0])
         return
     }
 
@@ -333,7 +333,7 @@ func main() {
     flag.Parse()
 
     if *help {
-        usage()
+        usage(os.Args[0])
         return
     }
 
@@ -368,8 +368,8 @@ func header() {
     fmt.Fprintf(os.Stderr, "Copyright (c) 2017 Sascha Kohlmann.\n")
 }
 
-func usage() {
-    fmt.Fprintf(os.Stderr, "usage: si [options] image\n\n")
+func usage(prgName string) {
+    fmt.Fprintf(os.Stderr, "usage: %s [options]\n\n", prgName)
     header()
     fmt.Fprintf(os.Stderr, "\nOptions:\n")
     fmt.Fprintf(os.Stderr, "  -h       : prints this help\n")
