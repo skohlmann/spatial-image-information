@@ -250,34 +250,29 @@ func computeMaximumSymmetricSurroundSaliency(source LAB, width, height int, norm
     
     kernel := []float64{1.0, 2.0, 1.0}
     
-    gaussianStart := time.Now() 
     chLs := make(chan []float64)
     chAs := make(chan []float64)
     chBs := make(chan []float64)
-    go gaussianSmooth(source.L, width, height, kernel, chLs)
-    go gaussianSmooth(source.A, width, height, kernel, chAs)
-    go gaussianSmooth(source.B, width, height, kernel, chBs)
-    ls := <- chLs
-    as := <- chAs
-    bs := <- chBs
-    if *verbose {
-        ex := time.Since(gaussianStart).Nanoseconds()
-        fmt.Fprintf(os.Stderr, "gaussianSmooth: %d\n", ex)
-    }
-
-    integralStart := time.Now() 
     chLint := make(chan [][]float64)
     chAint := make(chan [][]float64)
     chBint := make(chan [][]float64)
+    start := time.Now() 
+    go gaussianSmooth(source.L, width, height, kernel, chLs)
+    go gaussianSmooth(source.A, width, height, kernel, chAs)
+    go gaussianSmooth(source.B, width, height, kernel, chBs)
+
     go createIntegralImage(source.L, width, height, chLint)
     go createIntegralImage(source.A, width, height, chAint)
     go createIntegralImage(source.B, width, height, chBint)
+    ls := <- chLs
+    as := <- chAs
+    bs := <- chBs
     lint := <-chLint
     aint := <-chAint
     bint := <-chBint
     if *verbose {
-        ex := time.Since(integralStart).Nanoseconds()
-        fmt.Fprintf(os.Stderr, "createIntegralImage: %d\n", ex)
+        ex := time.Since(start).Nanoseconds()
+        fmt.Fprintf(os.Stderr, "parallel: %d\n", ex)
     }
 
     index := 0
