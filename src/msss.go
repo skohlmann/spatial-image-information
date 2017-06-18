@@ -20,6 +20,7 @@ import (
     "image/png" // register the PNG format with the image package
     "os"
     "strings"
+    "time"
     "math"
 )
 
@@ -118,7 +119,7 @@ func imageToLab(src image.Image) *LAB {
     return lab
 }
 
-func gaussianSmooth(srcImg []float64, width int, height int, kernel []float64) []float64 {
+func gaussianSmooth(srcImg []float64, width int, height int, kernel []float64, ch chan<- []float64) {
     smoothImg := make([]float64, len(srcImg))
     tmpImg := make([]float64, len(srcImg))
     center := len(kernel) / 2
@@ -162,10 +163,10 @@ func gaussianSmooth(srcImg []float64, width int, height int, kernel []float64) [
         } 
     }
 
-    return smoothImg 
+    ch <- smoothImg 
 }
 
-func createIntegralImage(srcImg []float64, width int, height int) [][]float64 {
+func createIntegralImage(srcImg []float64, width int, height int, ch chan<- [][]float64) {
     intImg := make([][]float64, height)
     for i := range intImg {
         intImg[i] = make([]float64, width)
@@ -185,7 +186,7 @@ func createIntegralImage(srcImg []float64, width int, height int) [][]float64 {
         }
     }
     
-    return intImg
+    ch <- intImg
 }
 
 func getIntegralSum(intImg [][]float64, x1, y1, x2, y2 int) float64 {
@@ -204,11 +205,12 @@ func getIntegralSum(intImg [][]float64, x1, y1, x2, y2 int) float64 {
     return sum
 }
 
-func doNormalize(salMap []float64, width, height int) {
+func doNormalize(salMap []float64) {
     maxValue := 0.0
     minValue := float64(1 << 30)
     
-    size := width * height
+    size := len(salMap)
+    
     for i := 0; i < size; i++ {
         if maxValue < salMap[i] {
             maxValue = salMap[i]
@@ -248,13 +250,35 @@ func computeMaximumSymmetricSurroundSaliency(source LAB, width, height int, norm
     
     kernel := []float64{1.0, 2.0, 1.0}
     
-    ls := gaussianSmooth(source.L, width, height, kernel)
-    as := gaussianSmooth(source.A, width, height, kernel)
-    bs := gaussianSmooth(source.B, width, height, kernel)
+    gaussianStart := time.Now() 
+    chLs := make(chan []float64)
+    chAs := make(chan []float64)
+    chBs := make(chan []float64)
+    go gaussianSmooth(source.L, width, height, kernel, chLs)
+    go gaussianSmooth(source.A, width, height, kernel, chAs)
+    go gaussianSmooth(source.B, width, height, kernel, chBs)
+    ls := <- chLs
+    as := <- chAs
+    bs := <- chBs
+    if *verbose {
+        ex := time.Since(gaussianStart).Nanoseconds()
+        fmt.Fprintf(os.Stderr, "gaussianSmooth: %d\n", ex)
+    }
 
-    lint := createIntegralImage(source.L, width, height)
-    aint := createIntegralImage(source.A, width, height)
-    bint := createIntegralImage(source.B, width, height)
+    integralStart := time.Now() 
+    chLint := make(chan [][]float64)
+    chAint := make(chan [][]float64)
+    chBint := make(chan [][]float64)
+    go createIntegralImage(source.L, width, height, chLint)
+    go createIntegralImage(source.A, width, height, chAint)
+    go createIntegralImage(source.B, width, height, chBint)
+    lint := <-chLint
+    aint := <-chAint
+    bint := <-chBint
+    if *verbose {
+        ex := time.Since(integralStart).Nanoseconds()
+        fmt.Fprintf(os.Stderr, "createIntegralImage: %d\n", ex)
+    }
 
     index := 0
     for j := 0; j < height; j++ {
@@ -279,7 +303,7 @@ func computeMaximumSymmetricSurroundSaliency(source LAB, width, height int, norm
     }
     
     if normalize == true {
-        doNormalize(saliencyMap, width, height)
+        doNormalize(saliencyMap)
     }
     
     return saliencyMap
@@ -318,6 +342,8 @@ func check(e error) {
     }
 }
 
+var verbose *bool
+
 func main() {
     if len(os.Args) == 1 {
         usage(os.Args[0])
@@ -326,6 +352,7 @@ func main() {
 
     saliencyImgName := flag.String("o", "", "Name of the saliency image")
     help := flag.Bool("h", false, "Prints this help")
+    verbose = flag.Bool("v", false, "Prints verbose informtion")
     flag.Parse()
     srcImgName := os.Args[len(os.Args) - 1]
 
@@ -370,5 +397,6 @@ func usage(prgName string) {
     fmt.Fprintf(os.Stderr, "\nOptions:\n")
     fmt.Fprintf(os.Stderr, "  -h       : prints this help\n")
     fmt.Fprintf(os.Stderr, "  -o name  : stores a saliency control image with <name> - optional\n")
+    fmt.Fprintf(os.Stderr, "  -v       : verbose\n")
 }
 
