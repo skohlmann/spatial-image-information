@@ -10,7 +10,6 @@ import (
     "os"
     "strings"
     "math"
-    "sync"
     "time"
 )
 
@@ -26,6 +25,10 @@ func loadImage(name string) image.Image {
     return src
 }
 
+type si struct {
+    SIsum int64
+    SIrm int64
+}
 
 func main() {
     
@@ -105,16 +108,13 @@ func main() {
 
     newImage := image.NewGray(image.Rect(0, 0, width, height))
      
-    var SIsum int64
-    var SIrm int64
-
-
-    semk := make(chan int, height - half_kernel_size)
-    var mu sync.Mutex
+    semk := make(chan *si, height - half_kernel_size)
 
     startSi := time.Now()
     for y := 1; y < height - half_kernel_size; y++ {
         go func(y int) {
+            si := new(si)
+
             for x := 1; x < width - half_kernel_size; x++ {
     
                 var magX float64
@@ -133,17 +133,21 @@ func main() {
                 }
     
                 SIr := int64(math.Sqrt(float64((magX * magX) + (magY * magY))))
-                mu.Lock()
-                SIsum += SIr 
-                SIrm += (SIr * SIr)
+                si.SIsum += SIr 
+                si.SIrm += (SIr * SIr)
     
                 newImage.SetGray(x, y, color.Gray{uint8(SIr)})
-                mu.Unlock()
             }
-            semk <- 1
+            semk <- si
         }(y)
     }
-    for y := 1; y < height - half_kernel_size; y++ {<- semk}
+    var SIsum int64
+    var SIrm int64 
+    for y := 1; y < height - half_kernel_size; y++ {
+        si := <- semk
+        SIsum += si.SIsum
+        SIrm += si.SIrm
+    }
     verbosePrintExecDuration(startSi, "si calc")
 
     pixel := width * height
