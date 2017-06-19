@@ -80,23 +80,28 @@ func main() {
     salMap := saliency.MaximumSymmetricSurroundSaliency(*lab)
     verbosePrintExecDuration(startSal, "saliency calculation")
 
-    gray := image.NewGray(bounds)
     size := len(salMap)
     var Ssum float64
     for i := 0; i < size; i++ {
         Ssum += salMap[i]
-        gray.Pix[i] = uint8(salMap[i] * 1.1)
     }
     
     Smean := (1.0 / float64((float64(bounds.Max.X * bounds.Max.Y))) * Ssum)
     fmt.Printf("%f", Smean)
     
     if strings.Compare(*saliencyImgName, "") != 0 {
+        startEncode := time.Now()
+        gray := image.NewGray(bounds)
+        for i := 0; i < size; i++ {
+            gray.Pix[i] = uint8(salMap[i] * 1.1)
+        }
+
         saveFile, err := os.Create(*saliencyImgName)
         check(err)
         defer saveFile.Close()
         err = png.Encode(saveFile, gray)
         check(err)
+        verbosePrintExecDuration(startEncode, "ctrl img")
     }
 }
 
