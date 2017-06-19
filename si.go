@@ -9,9 +9,12 @@ import (
     "image/png" // register the PNG format with the image package
     "os"
     "strings"
+    "time"
     "math"
 )
-    
+
+var verbose *bool
+
 func check(e error) {
     if e != nil {
         panic(e)
@@ -73,7 +76,7 @@ func main() {
     }
 
     siImgName := flag.String("o", "", "Name of the SI image - optional")
-    verbose := flag.Bool("v", false, "Prints additional information to stderr")
+    verbose = flag.Bool("v", false, "Prints additional information to stderr")
     help := flag.Bool("h", false, "Prints this help")
     // kernelName := flag.String("k", "sobel", "Name of the SI kernel - optional")
     flag.Parse()
@@ -85,7 +88,9 @@ func main() {
     }
     
     
+    startLoad := time.Now()
     src := loadImage(srcImgName)
+    verbosePrintExecDuration(startLoad, "load image")
 
     sobelX_kernel3x3 := [3][3]int{
         {-1, 0, 1},
@@ -122,6 +127,7 @@ func main() {
     height := dimension.Y
 
     grayImage := image.NewGray(image.Rect(0, 0, width, height))
+    startGray := time.Now()
     for y := 1; y < height; y++ {
          for x := 1; x < width; x++ {
             oldPixel := src.At(x, y)
@@ -129,13 +135,14 @@ func main() {
             grayImage.Set(x, y, pixel)
         }
     }
+    verbosePrintExecDuration(startGray, "to gray")
 
     newImage := image.NewGray(image.Rect(0, 0, width, height))
      
     var SIsum int64
     var SIrm int64
 
-
+    startSi := time.Now()
     for y := 1; y < height - half_kernel_size; y++ {
         for x := 1; x < width - half_kernel_size; x++ {
 
@@ -161,6 +168,7 @@ func main() {
             newImage.SetGray(x, y, color.Gray{uint8(SIr)})
         }
     }
+    verbosePrintExecDuration(startSi, "si calc")
 
     pixel := width * height
     SImean := (1.0 / float64(pixel)) * float64(SIsum)
@@ -186,3 +194,8 @@ func main() {
     }
 }
 
+func verbosePrintExecDuration(t time.Time, prefix string) {
+    if *verbose {
+        fmt.Fprintf(os.Stderr, "%s: %d\n", prefix, time.Since(t).Nanoseconds())
+    }
+}
