@@ -35,7 +35,7 @@ Use
    si &lt;image>
 </pre>
 
-from command line where `&lt;image>` is the filename of the PNG or JPEG image to get `SImean` for.
+from command line where `<image>` is the filename of the PNG or JPEG image to get `SImean` for.
 
 # Build
 
@@ -44,6 +44,6 @@ Precondition: installed `go` 1.8.3
 Clone the repository and type
 
 <pre>
-    go build src/si.go 
+    go build si.go 
+    go build msss.go 
 </pre>
-

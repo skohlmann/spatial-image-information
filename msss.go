@@ -21,8 +21,8 @@ import (
     "os"
     "strings"
     "time"
-    "lab"
-    "saliency"
+    lab "github.com/skohlmann/go-lab"
+    saliency "github.com/skohlmann/go-saliency"
 )
 
 func loadImage(name string) image.Image {
