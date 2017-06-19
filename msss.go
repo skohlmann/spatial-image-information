@@ -25,6 +25,9 @@ import (
     saliency "github.com/skohlmann/go-saliency"
 )
 
+var verbose *bool
+
+
 func loadImage(name string) image.Image {
     infile, err := os.Open(name)
     check(err)
@@ -41,8 +44,6 @@ func check(e error) {
         panic(e)
     }
 }
-
-var verbose *bool
 
 func verbosePrintExecDuration(t time.Time, prefix string) {
     if *verbose {

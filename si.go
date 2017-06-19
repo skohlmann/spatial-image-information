@@ -5,66 +5,25 @@ import (
     "fmt"
     "image"
     "image/color"
-    "image/jpeg" // register the PNG format with the image package
+    _ "image/jpeg" // register the PNG format with the image package
     "image/png" // register the PNG format with the image package
     "os"
     "strings"
-    "time"
     "math"
+    "sync"
+    "time"
 )
 
 var verbose *bool
-
-func check(e error) {
-    if e != nil {
-        panic(e)
-    }
-}
-
-type Kernel struct {
-    X [][]int
-    Y [][]int
-}
-
-func header() {
-    fmt.Fprintf(os.Stderr, "Spartial information of images.\n")
-    fmt.Fprintf(os.Stderr, "Copyright (c) 2017 Sascha Kohlmann.\n")
-}
-
-func usage(prgName string) {
-    fmt.Fprintf(os.Stderr, "usage: %s [options] image\n\n", prgName	)
-    header()
-    fmt.Fprintf(os.Stderr, "\nOptions:\n")
-    fmt.Fprintf(os.Stderr, "  -h       : prints this help\n")
-    fmt.Fprintf(os.Stderr, "  -k name  : name of the kernel to use. Default: sobel\n")
-    fmt.Fprintf(os.Stderr, "  -o name  : stores a control image with <name>\n")
-    fmt.Fprintf(os.Stderr, "  -v       : prints additional information on stderr\n")
-}
-
-func postfix(name string) string {
-    parts := strings.Split(name, ".")
-    if len(parts) != 0 {
-        return parts[len(parts) - 1]
-    }
-    return ""
-}
 
 func loadImage(name string) image.Image {
     infile, err := os.Open(name)
     check(err)
     defer infile.Close()
-    postfix := strings.ToLower(postfix(name))
 
-    if strings.Compare(postfix, "png") == 0 {
-        src, err := png.Decode(infile)
-        check(err)
-        return src
-    } else if strings.Compare(postfix, "jpg") == 0 {
-        src, err := jpeg.Decode(infile)
-        check(err)
-        return src
-    }
-    panic("Unsupported image type. Must be PNG or JPEG")
+    src, _, err := image.Decode(infile)
+    check(err)
+    return src
 }
 
 
@@ -127,14 +86,21 @@ func main() {
     height := dimension.Y
 
     grayImage := image.NewGray(image.Rect(0, 0, width, height))
+    
+    sem := make(chan int, height)
+   
     startGray := time.Now()
-    for y := 1; y < height; y++ {
-         for x := 1; x < width; x++ {
-            oldPixel := src.At(x, y)
-            pixel := color.GrayModel.Convert(oldPixel)
-            grayImage.Set(x, y, pixel)
-        }
+    for y := 0; y < height; y++ {
+        go func(y int) {
+            for x := 0; x < width; x++ {
+                oldPixel := src.At(x, y)
+                pixel := color.GrayModel.Convert(oldPixel)
+                grayImage.Set(x, y, pixel)
+            }
+            sem <- 1
+        }(y)
     }
+    for y := 0; y < height; y++ {<- sem}
     verbosePrintExecDuration(startGray, "to gray")
 
     newImage := image.NewGray(image.Rect(0, 0, width, height))
@@ -142,32 +108,42 @@ func main() {
     var SIsum int64
     var SIrm int64
 
+
+    semk := make(chan int, height - half_kernel_size)
+    var mu sync.Mutex
+
     startSi := time.Now()
     for y := 1; y < height - half_kernel_size; y++ {
-        for x := 1; x < width - half_kernel_size; x++ {
-
-            var magX float64
-            var magY float64
-
-            for a := 0; a < kernel_size; a++ {
-                for b := 0; b < kernel_size; b++ {
-                    xn := x + a - half_kernel_size
-                    yn := y + b - half_kernel_size
-
-                    idx := xn + yn * width
-
-                    magX += float64(grayImage.Pix[idx]) * float64(kernelX[a][b])
-                    magY += float64(grayImage.Pix[idx]) * float64(kernelY[a][b])
+        go func(y int) {
+            for x := 1; x < width - half_kernel_size; x++ {
+    
+                var magX float64
+                var magY float64
+    
+                for a := 0; a < kernel_size; a++ {
+                    for b := 0; b < kernel_size; b++ {
+                        xn := x + a - half_kernel_size
+                        yn := y + b - half_kernel_size
+    
+                        idx := xn + yn * width
+    
+                        magX += float64(grayImage.Pix[idx]) * float64(kernelX[a][b])
+                        magY += float64(grayImage.Pix[idx]) * float64(kernelY[a][b])
+                    }
                 }
+    
+                SIr := int64(math.Sqrt(float64((magX * magX) + (magY * magY))))
+                mu.Lock()
+                SIsum += SIr 
+                SIrm += (SIr * SIr)
+    
+                newImage.SetGray(x, y, color.Gray{uint8(SIr)})
+                mu.Unlock()
             }
-
-            SIr := int64(math.Sqrt(float64((magX * magX) + (magY * magY))))
-            SIsum += SIr 
-            SIrm += (SIr * SIr)
-
-            newImage.SetGray(x, y, color.Gray{uint8(SIr)})
-        }
+            semk <- 1
+        }(y)
     }
+    for y := 1; y < height - half_kernel_size; y++ {<- semk}
     verbosePrintExecDuration(startSi, "si calc")
 
     pixel := width * height
@@ -192,6 +168,32 @@ func main() {
         err = png.Encode(saveFile, newImage)
         check(err)
     }
+}
+
+func check(e error) {
+    if e != nil {
+        panic(e)
+    }
+}
+
+type Kernel struct {
+    X [][]int
+    Y [][]int
+}
+
+func header() {
+    fmt.Fprintf(os.Stderr, "Spartial information of images.\n")
+    fmt.Fprintf(os.Stderr, "Copyright (c) 2017 Sascha Kohlmann.\n")
+}
+
+func usage(prgName string) {
+    fmt.Fprintf(os.Stderr, "usage: %s [options] image\n\n", prgName	)
+    header()
+    fmt.Fprintf(os.Stderr, "\nOptions:\n")
+    fmt.Fprintf(os.Stderr, "  -h       : prints this help\n")
+    fmt.Fprintf(os.Stderr, "  -k name  : name of the kernel to use. Default: sobel\n")
+    fmt.Fprintf(os.Stderr, "  -o name  : stores a control image with <name>\n")
+    fmt.Fprintf(os.Stderr, "  -v       : prints additional information on stderr\n")
 }
 
 func verbosePrintExecDuration(t time.Time, prefix string) {
