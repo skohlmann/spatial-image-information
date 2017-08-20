@@ -186,7 +186,7 @@ type Kernel struct {
 }
 
 func header() {
-    fmt.Fprintf(os.Stderr, "Spartial information of images.\n")
+    fmt.Fprintf(os.Stderr, "Spatial information of images.\n")
     fmt.Fprintf(os.Stderr, "Copyright (c) 2017 Sascha Kohlmann.\n")
 }
 
